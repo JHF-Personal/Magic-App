@@ -1,6 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Deck, DeckContextType } from '../types/deck';
-import { databaseService } from '../services/databaseService';
+import React, {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import { databaseService } from "../services/(OLD)_databaseService";
+import { Deck, DeckContextType } from "../types/deck";
 
 const DeckContext = createContext<DeckContextType | undefined>(undefined);
 
@@ -26,8 +32,8 @@ export function DeckProvider({ children }: DeckProviderProps) {
       const fetchedDecks = await databaseService.getAllDecks();
       setDecks(fetchedDecks);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load decks');
-      console.error('Error loading decks:', err);
+      setError(err instanceof Error ? err.message : "Failed to load decks");
+      console.error("Error loading decks:", err);
     } finally {
       setIsLoading(false);
     }
@@ -40,8 +46,8 @@ export function DeckProvider({ children }: DeckProviderProps) {
       const deck = await databaseService.getDeckById(deckId);
       setSelectedDeck(deck);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load deck');
-      console.error('Error selecting deck:', err);
+      setError(err instanceof Error ? err.message : "Failed to load deck");
+      console.error("Error selecting deck:", err);
     } finally {
       setIsLoading(false);
     }
@@ -56,7 +62,12 @@ export function DeckProvider({ children }: DeckProviderProps) {
     await loadDecks();
   };
 
-  const createDeck = async (deck: Omit<Deck, 'id' | 'created_at' | 'updated_at' | 'wins' | 'losses' | 'total_games'>): Promise<Deck> => {
+  const createDeck = async (
+    deck: Omit<
+      Deck,
+      "id" | "created_at" | "updated_at" | "wins" | "losses" | "total_games"
+    >,
+  ): Promise<Deck> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -64,7 +75,7 @@ export function DeckProvider({ children }: DeckProviderProps) {
       await loadDecks(); // Refresh the list
       return newDeck;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create deck');
+      setError(err instanceof Error ? err.message : "Failed to create deck");
       throw err;
     } finally {
       setIsLoading(false);
@@ -82,7 +93,7 @@ export function DeckProvider({ children }: DeckProviderProps) {
       }
       return updatedDeck;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update deck');
+      setError(err instanceof Error ? err.message : "Failed to update deck");
       throw err;
     } finally {
       setIsLoading(false);
@@ -99,7 +110,7 @@ export function DeckProvider({ children }: DeckProviderProps) {
         setSelectedDeck(null);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete deck');
+      setError(err instanceof Error ? err.message : "Failed to delete deck");
       throw err;
     } finally {
       setIsLoading(false);
@@ -119,17 +130,13 @@ export function DeckProvider({ children }: DeckProviderProps) {
     deleteDeck,
   };
 
-  return (
-    <DeckContext.Provider value={value}>
-      {children}
-    </DeckContext.Provider>
-  );
+  return <DeckContext.Provider value={value}>{children}</DeckContext.Provider>;
 }
 
 export function useDeck(): DeckContextType {
   const context = useContext(DeckContext);
   if (context === undefined) {
-    throw new Error('useDeck must be used within a DeckProvider');
+    throw new Error("useDeck must be used within a DeckProvider");
   }
   return context;
 }

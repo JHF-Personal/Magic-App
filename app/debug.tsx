@@ -1,13 +1,8 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import DatabaseDebug from '../components/debug/DatabaseDebug';
+import React from "react";
+import { StyleSheet, View } from "react-native";
 
 export default function DebugPage() {
-  return (
-    <View style={styles.container}>
-      <DatabaseDebug />
-    </View>
-  );
+  return <View style={styles.container}></View>;
 }
 
 const styles = StyleSheet.create({
