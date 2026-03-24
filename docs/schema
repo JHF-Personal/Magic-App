@@ -1,0 +1,434 @@
+Here’s a **complete, structured feature schema** you can use to represent a 4-player Commander pod *purely from pre-game information*. This is designed to be:
+
+* Model-friendly (works for XGBoost or neural nets)
+* Interpretable
+* Strong baseline without requiring raw card embeddings
+
+---
+
+# 🧠 OVERALL STRUCTURE
+
+Each **training sample = 1 game**, flattened like:
+
+```
+Game Features:
+  Player1_Features
+  Player2_Features
+  Player3_Features
+  Player4_Features
+  Table-Level Features
+```
+
+You can prefix everything with `P1_`, `P2_`, etc.
+
+---
+
+# 1. PLAYER-LEVEL FEATURES
+
+Each player gets the same schema.
+
+---
+
+## A. Commander Features
+
+```
+commander_id                  (categorical → embedding or one-hot)
+commander_color_identity      (multi-hot: W,U,B,R,G)
+commander_cmc                 (float)
+commander_power               (float, if available)
+commander_toughness           (float)
+
+commander_archetype           (one-hot)
+  - aggro
+  - control
+  - midrange
+  - combo
+  - stax
+  - tribal
+  - spellslinger
+  - ramp
+
+commander_strategy_tags       (multi-hot)
+  - graveyard
+  - artifacts
+  - enchantments
+  - tokens
+  - +1/+1 counters
+  - extra turns
+  - storm
+```
+
+---
+
+## B. Deck Composition Features
+
+### Card Type Counts
+
+```
+num_creatures
+num_instants
+num_sorceries
+num_artifacts
+num_enchantments
+num_planeswalkers
+num_lands
+```
+
+### Ratios (important)
+
+```
+creature_ratio
+interaction_ratio
+ramp_ratio
+draw_ratio
+land_ratio
+```
+
+---
+
+## C. Mana Curve Features
+
+```
+avg_cmc
+median_cmc
+
+cmc_0_1_count
+cmc_2_count
+cmc_3_count
+cmc_4_count
+cmc_5_count
+cmc_6_plus_count
+
+curve_skewness
+curve_std
+```
+
+---
+
+## D. Ramp / Acceleration
+
+```
+num_ramp_cards
+num_fast_mana           (Sol Ring, Mana Crypt, etc.)
+num_land_ramp
+num_mana_dorks
+num_rocks
+
+avg_ramp_cmc
+ramp_early_game_ratio   (<=2 CMC ramp)
+```
+
+---
+
+## E. Card Advantage
+
+```
+num_card_draw
+num_repeatable_draw
+num_burst_draw
+
+num_tutors
+tutor_efficiency_score   (weighted by tutor power)
+```
+
+---
+
+## F. Interaction Package
+
+```
+num_single_target_removal
+num_board_wipes
+num_counterspells
+num_stack_interaction
+
+interaction_density
+instant_speed_interaction_ratio
+```
+
+---
+
+## G. Win Condition Features
+
+```
+num_combo_pieces
+num_known_combos
+combo_density
+
+num_alternate_wincons
+num_big_finishers
+
+wincon_speed_score       (estimated turns to win)
+```
+
+---
+
+## H. Consistency / Stability
+
+```
+mana_base_quality_score
+color_fixing_density
+
+num_tutors
+redundancy_score          (duplicate effects)
+
+deck_consistency_score    (aggregate metric)
+```
+
+---
+
+## I. Synergy Features
+
+```
+tribal_density
+artifact_synergy_score
+enchantment_synergy_score
+graveyard_synergy_score
+token_synergy_score
+
+overall_synergy_score
+```
+
+---
+
+## J. Control / Disruption Profile
+
+```
+stax_piece_count
+tax_effect_count
+resource_denial_score
+
+opponent_disruption_score
+```
+
+---
+
+## K. Speed & Tempo
+
+```
+early_game_presence_score
+midgame_strength_score
+late_game_scaling_score
+
+goldfish_turn_estimate     (estimated win turn)
+tempo_score
+```
+
+---
+
+## L. Color Identity Encoding
+
+```
+is_white
+is_blue
+is_black
+is_red
+is_green
+
+num_colors
+```
+
+---
+
+## M. Deck Archetype (Primary)
+
+```
+deck_archetype:
+  - aggro
+  - control
+  - combo
+  - midrange
+  - stax
+  - hybrid
+```
+
+---
+
+# 2. TABLE-LEVEL FEATURES (CRITICAL)
+
+These capture **multiplayer dynamics**.
+
+---
+
+## A. Seat Position
+
+For each player:
+
+```
+seat_position (0–3)
+is_first
+is_last
+```
+
+---
+
+## B. Relative Speed
+
+```
+speed_rank_at_table        (1–4)
+is_fastest_deck
+is_slowest_deck
+```
+
+---
+
+## C. Archetype Matchups
+
+For each player:
+
+```
+num_opponents_aggro
+num_opponents_control
+num_opponents_combo
+num_opponents_stax
+```
+
+---
+
+## D. Interaction Pressure
+
+```
+total_opponent_interaction
+avg_opponent_interaction
+
+is_most_targeted_archetype   (e.g., combo)
+```
+
+---
+
+## E. Color Competition
+
+```
+shared_color_count_with_others
+num_players_sharing_colors
+
+color_conflict_score
+```
+
+---
+
+## F. Threat Assessment Proxies
+
+```
+relative_power_level_rank
+is_highest_power_deck
+
+threat_score
+```
+
+---
+
+## G. Table Balance Metrics
+
+```
+power_level_std
+speed_std
+interaction_std
+```
+
+---
+
+# 3. PAIRWISE FEATURES (VERY POWERFUL)
+
+For each player vs each opponent:
+
+```
+matchup_advantage_score
+
+speed_difference
+interaction_difference
+combo_vs_control_flag
+aggro_vs_combo_flag
+```
+
+Flattened like:
+
+```
+P1_vs_P2_speed_diff
+P1_vs_P3_speed_diff
+...
+```
+
+---
+
+# 4. OPTIONAL ADVANCED FEATURES
+
+---
+
+## A. Learned Meta Features
+
+If you have enough data:
+
+```
+commander_winrate_prior
+archetype_winrate_prior
+color_combination_winrate
+```
+
+---
+
+## B. Embedding Features
+
+* Learned vector for:
+
+  * commander
+  * archetype
+  * color identity
+
+---
+
+# 5. FINAL FEATURE SIZE ESTIMATE
+
+Per player:
+
+* ~80–120 features
+
+Total:
+
+* Players: ~320–480
+* Table features: ~50–100
+  👉 Total: **~400–600 features**
+
+---
+
+# 6. IMPORTANT DESIGN NOTES
+
+### Normalize Everything
+
+* Scale numeric features (0–1 or z-score)
+
+### Avoid Leakage
+
+* No in-game info (draws, plays, etc.)
+
+### Handle Symmetry
+
+* Either:
+
+  * Randomize player order
+  * Or use permutation-invariant models
+
+---
+
+# 7. STRONG PRACTICAL START (RECOMMENDED)
+
+If you want a *lean but powerful* version:
+
+Use only:
+
+* Mana curve
+* Ramp
+* Interaction
+* Wincon speed
+* Archetype
+* Color identity
+* Table matchup features
+
+👉 That alone can get surprisingly strong predictions.
+
+---
+
+If you want next steps, I can:
+
+* Turn this into a **real dataset schema (CSV/Parquet columns)**
+* Write a **feature extractor from raw decklists**
+* Or design a **PyTorch model using this schema**

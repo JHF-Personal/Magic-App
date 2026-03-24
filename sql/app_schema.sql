@@ -32,7 +32,7 @@ Decks (
   commander_cmc    INT,              -- commander's CMC
   color_count      SMALLINT,         -- number of colors (1-5)
   primary_colors   CHAR(5),          -- most represented colors
-  deck_archetype   TEXT,             -- aggro/midrange/control/combo
+  deck_archetype   TEXT,             -- turbo(aggro)/midrange/stax(control)/combo
   power_bracket    SMALLINT,         -- 1-5 rating
   calculated_power_level DECIMAL(4,2), -- computed power level for matchup analysis
   meta_tier        SMALLINT,         -- current meta tier ranking (1-5)
@@ -77,7 +77,7 @@ GamePlayers (
   -- Multiplayer Analytics
   elimination_order    SMALLINT,                   -- 1st out, 2nd out, etc. NULL for winner
   elimination_turn     INT,                        -- turn number when eliminated
-  elimination_reason   TEXT,                       -- combat / combo / mill / concede / timeout
+  elimination_reason   TEXT,                       -- combat / commander/ combo / mill / concede / timeout
   eliminated_by_user   BIGINT REFERENCES Users(user_id), -- who eliminated this player
   final_life_total     INT,                        -- life when eliminated/game ended
   turns_survived       INT,                        -- number of turns player survived
