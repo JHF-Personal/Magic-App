@@ -1,11 +1,11 @@
 import React from "react";
 import {
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+	Pressable,
+	ScrollView,
+	StyleSheet,
+	Text,
+	TextInput,
+	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -124,11 +124,11 @@ export default function AddDeckPage() {
 
 					<View style={styles.archetypeRow}>
 						<View style={styles.archetypeField}>
-							<Text style={styles.archetypeLabel}>Archetype</Text>
+							<Text style={styles.archetypeLabel}>Primary Archetype</Text>
 							<Text style={styles.archetypeValue}>Primary</Text>
 						</View>
 						<View style={styles.archetypeField}>
-							<Text style={styles.archetypeLabel}>Archetype</Text>
+							<Text style={styles.archetypeLabel}>Secondary Archetype</Text>
 							<Text style={styles.archetypeValue}>Secondary</Text>
 						</View>
 					</View>
