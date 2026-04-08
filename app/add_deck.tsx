@@ -1,13 +1,17 @@
 import React from "react";
 import {
-	Pressable,
-	ScrollView,
-	StyleSheet,
-	Text,
-	TextInput,
-	View,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  DeckImportProvider,
+  useDeckImport,
+} from "../contexts/DeckImportContext";
 
 const COLOR_IDENTITY = ["W", "U", "B", "R", "G"];
 
@@ -20,7 +24,426 @@ const SUMMARY_ITEMS = [
   "Est win turn:",
 ];
 
+// Decklist input component using context
+function DecklistSection() {
+  const { state, actions } = useDeckImport();
+
+  const handleAnalyze = async () => {
+    await actions.analyzeDeck();
+  };
+
+  return (
+    <View style={styles.sectionCard}>
+      <Text style={styles.sectionLabel}>Decklist</Text>
+      <TextInput
+        multiline
+        placeholder="Paste Plain Text decklist here"
+        placeholderTextColor="#8A907C"
+        style={[styles.inputPanel, styles.decklistInput]}
+        textAlignVertical="top"
+        value={state.rawDecklist}
+        onChangeText={actions.setRawDecklist}
+        editable={!state.isAnalyzing}
+      />
+
+      <View style={styles.inlineActionRow}>
+        <Pressable
+          onPress={handleAnalyze}
+          style={[
+            styles.secondaryButton,
+            state.isAnalyzing && styles.buttonDisabled,
+          ]}
+          disabled={state.isAnalyzing || !state.rawDecklist.trim()}
+        >
+          <Text style={styles.secondaryButtonText}>
+            {state.isAnalyzing ? "Analyzing..." : "Analyze Deck"}
+          </Text>
+        </Pressable>
+        {state.validationIssues.filter((issue) => issue.severity === "error")
+          .length > 0 && (
+          <Text style={styles.errorText}>
+            {
+              state.validationIssues.filter(
+                (issue) => issue.severity === "error",
+              ).length
+            }{" "}
+            error(s) found
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// Commander and color identity section
+function CommanderSection() {
+  const { state } = useDeckImport();
+
+  return (
+    <View style={styles.sectionCard}>
+      <Text style={styles.sectionLabel}>
+        Commander: {state.parsedDecklist?.commander?.card_name || ""}
+      </Text>
+      <Text style={styles.sectionLabel}>Color Identity</Text>
+      <View style={styles.colorRow}>
+        {COLOR_IDENTITY.map((color) => {
+          const isActive =
+            state.editableData.colorIdentity[
+              `is_${color.toLowerCase()}` as keyof typeof state.editableData.colorIdentity
+            ] === 1;
+          return (
+            <View
+              key={color}
+              style={[styles.colorPill, isActive && styles.colorPillActive]}
+            >
+              <Text style={styles.colorPillText}>{color}</Text>
+            </View>
+          );
+        })}
+      </View>
+
+      <Text style={styles.sectionLabel}>CMC graph</Text>
+      <View style={styles.chartFrame}>
+        <View style={styles.chartGrid}>
+          {MANA_CURVE_BARS.map((height, index) => (
+            <View key={index} style={styles.chartBarColumn}>
+              <View style={[styles.chartBar, { height: `${height * 100}%` }]} />
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <Text style={styles.avgText}>
+        Avg CMC: {state.editableData.manaCurve.avg_cmc?.toFixed(2) || "0.00"}
+      </Text>
+    </View>
+  );
+}
+
+// Ramp cards section
+function RampSection() {
+  const { state, actions } = useDeckImport();
+  const [newRampCard, setNewRampCard] = React.useState("");
+
+  const addRampCard = () => {
+    if (newRampCard.trim()) {
+      const currentCards = state.editableData.ramp.rampCards;
+      if (!currentCards.includes(newRampCard.trim())) {
+        actions.updateRampCards("rampCards", [
+          ...currentCards,
+          newRampCard.trim(),
+        ]);
+      }
+      setNewRampCard("");
+    }
+  };
+
+  const removeRampCard = (cardName: string) => {
+    const updatedCards = state.editableData.ramp.rampCards.filter(
+      (name) => name !== cardName,
+    );
+    actions.updateRampCards("rampCards", updatedCards);
+  };
+
+  return (
+    <View style={styles.sectionCard}>
+      <Text style={styles.sectionLabel}>Ramp cards</Text>
+
+      {/* Display current ramp cards */}
+      <View style={styles.cardChipsContainer}>
+        {state.editableData.ramp.rampCards.map((cardName, index) => (
+          <View key={index} style={styles.cardChip}>
+            <Text style={styles.cardChipText}>{cardName}</Text>
+            <Pressable
+              onPress={() => removeRampCard(cardName)}
+              style={styles.cardChipRemove}
+            >
+              <Text style={styles.cardChipRemoveText}>×</Text>
+            </Pressable>
+          </View>
+        ))}
+      </View>
+
+      {/* Add new ramp card */}
+      <View style={styles.addCardRow}>
+        <TextInput
+          placeholder="Add ramp card name"
+          placeholderTextColor="#8A907C"
+          style={styles.addCardInput}
+          value={newRampCard}
+          onChangeText={setNewRampCard}
+          onSubmitEditing={addRampCard}
+        />
+        <Pressable onPress={addRampCard} style={styles.addButton}>
+          <Text style={styles.addButtonText}>Add</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// Interaction cards section
+function InteractionSection() {
+  const { state, actions } = useDeckImport();
+  const [newInteractionCard, setNewInteractionCard] = React.useState("");
+
+  const addInteractionCard = () => {
+    if (newInteractionCard.trim()) {
+      const currentCards =
+        state.editableData.interaction.singleTargetRemovalCards;
+      if (!currentCards.includes(newInteractionCard.trim())) {
+        actions.updateInteractionCards("singleTargetRemovalCards", [
+          ...currentCards,
+          newInteractionCard.trim(),
+        ]);
+      }
+      setNewInteractionCard("");
+    }
+  };
+
+  return (
+    <View style={styles.sectionCard}>
+      <Text style={styles.sectionLabel}>Interaction cards</Text>
+
+      {/* Display current interaction cards */}
+      <View style={styles.cardChipsContainer}>
+        {state.editableData.interaction.singleTargetRemovalCards.map(
+          (cardName, index) => (
+            <View key={index} style={styles.cardChip}>
+              <Text style={styles.cardChipText}>{cardName}</Text>
+            </View>
+          ),
+        )}
+      </View>
+
+      {/* Add new interaction card */}
+      <View style={styles.addCardRow}>
+        <TextInput
+          placeholder="Add interaction card name"
+          placeholderTextColor="#8A907C"
+          style={styles.addCardInput}
+          value={newInteractionCard}
+          onChangeText={setNewInteractionCard}
+          onSubmitEditing={addInteractionCard}
+        />
+        <Pressable onPress={addInteractionCard} style={styles.addButton}>
+          <Text style={styles.addButtonText}>Add</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// Wincons section
+function WinconsSection() {
+  const { state, actions } = useDeckImport();
+  const [newWinconCard, setNewWinconCard] = React.useState("");
+
+  const addWinconCard = () => {
+    if (newWinconCard.trim()) {
+      const currentCards = state.editableData.wincons.comboPieceCards;
+      if (!currentCards.includes(newWinconCard.trim())) {
+        actions.updateWinconCards("comboPieceCards", [
+          ...currentCards,
+          newWinconCard.trim(),
+        ]);
+      }
+      setNewWinconCard("");
+    }
+  };
+
+  const updateStat = (field: string, value: string) => {
+    const numValue = parseInt(value) || 0;
+    const updatedStats = { ...state.editableData.wincons.stats };
+
+    if (field === "combo_pieces") {
+      updatedStats.num_combo_pieces = numValue;
+    } else if (field === "known_combos") {
+      updatedStats.num_known_combos = numValue;
+    } else if (field === "finishers") {
+      updatedStats.num_finishers = numValue;
+    } else if (field === "win_turn") {
+      updatedStats.goldfish_turn_estimate = numValue;
+    }
+
+    actions.updateWinconCards("stats", updatedStats);
+  };
+
+  return (
+    <View style={styles.sectionCard}>
+      <Text style={styles.sectionLabel}>Wincons / combo pieces</Text>
+
+      {/* Display current wincon cards */}
+      <View style={styles.cardChipsContainer}>
+        {state.editableData.wincons.comboPieceCards.map((cardName, index) => (
+          <View key={index} style={styles.cardChip}>
+            <Text style={styles.cardChipText}>{cardName}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Add new wincon card */}
+      <View style={styles.addCardRow}>
+        <TextInput
+          placeholder="Add wincon/combo piece"
+          placeholderTextColor="#8A907C"
+          style={styles.addCardInput}
+          value={newWinconCard}
+          onChangeText={setNewWinconCard}
+          onSubmitEditing={addWinconCard}
+        />
+        <Pressable onPress={addWinconCard} style={styles.addButton}>
+          <Text style={styles.addButtonText}>Add</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.summaryList}>
+        {SUMMARY_ITEMS.map((item) => (
+          <View key={item} style={styles.summaryRow}>
+            <Text style={styles.summaryText}>{item}</Text>
+            <TextInput
+              placeholder="0"
+              placeholderTextColor="#8A907C"
+              style={styles.summaryInput}
+              keyboardType="numeric"
+              returnKeyType="done"
+              value={(() => {
+                if (item === "Num combo pieces:")
+                  return (
+                    state.editableData.wincons.stats.num_combo_pieces?.toString() ||
+                    "0"
+                  );
+                if (item === "Num known combos:")
+                  return (
+                    state.editableData.wincons.stats.num_known_combos?.toString() ||
+                    "0"
+                  );
+                if (item === "Num finishers:")
+                  return (
+                    state.editableData.wincons.stats.num_finishers?.toString() ||
+                    "0"
+                  );
+                if (item === "Est win turn:")
+                  return (
+                    state.editableData.wincons.stats.goldfish_turn_estimate?.toString() ||
+                    "0"
+                  );
+                return "0";
+              })()}
+              onChangeText={(value) => {
+                if (item === "Num combo pieces:")
+                  updateStat("combo_pieces", value);
+                if (item === "Num known combos:")
+                  updateStat("known_combos", value);
+                if (item === "Num finishers:") updateStat("finishers", value);
+                if (item === "Est win turn:") updateStat("win_turn", value);
+              }}
+            />
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.archetypeRow}>
+        <View style={styles.archetypeField}>
+          <Text style={styles.archetypeLabel}>Primary Archetype</Text>
+          <Text style={styles.archetypeValue}>
+            {state.editableData.archetype.primary_archetype}
+          </Text>
+        </View>
+        <View style={styles.archetypeField}>
+          <Text style={styles.archetypeLabel}>Secondary Archetype</Text>
+          <Text style={styles.archetypeValue}>
+            {state.editableData.archetype.secondary_archetype || "None"}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// Main deck metadata section
+function DeckMetadataSection() {
+  const { state, actions } = useDeckImport();
+
+  return (
+    <View style={styles.sectionCard}>
+      <Text style={styles.sectionLabel}>Deck Information</Text>
+
+      <View style={styles.metadataRow}>
+        <Text style={styles.metadataLabel}>Deck Name:</Text>
+        <TextInput
+          placeholder="Enter deck name"
+          placeholderTextColor="#8A907C"
+          style={[styles.inputPanel, styles.metadataInput]}
+          value={state.editableData.deckName}
+          onChangeText={actions.updateDeckName}
+        />
+      </View>
+
+      <View style={styles.metadataRow}>
+        <Text style={styles.metadataLabel}>Owner:</Text>
+        <TextInput
+          placeholder="Enter owner name"
+          placeholderTextColor="#8A907C"
+          style={[styles.inputPanel, styles.metadataInput]}
+          value={state.editableData.owner}
+          onChangeText={actions.updateOwner}
+        />
+      </View>
+    </View>
+  );
+}
+
+// Save section
+function SaveSection() {
+  const { state, actions } = useDeckImport();
+
+  const handleSave = async () => {
+    await actions.saveDeck();
+  };
+
+  const canSave = state.isValid && state.parsedDecklist && !state.isSaving;
+
+  return (
+    <>
+      {state.hasUnsavedChanges && (
+        <Text style={styles.unsavedText}>You have unsaved changes</Text>
+      )}
+
+      {state.saveError && (
+        <Text style={styles.errorText}>Error: {state.saveError}</Text>
+      )}
+
+      {state.saveResult && (
+        <Text style={styles.successText}>
+          Deck saved successfully! ID: {state.saveResult.deck.deck_id}
+        </Text>
+      )}
+
+      <Pressable
+        onPress={handleSave}
+        style={[styles.primaryButton, !canSave && styles.buttonDisabled]}
+        disabled={!canSave}
+      >
+        <Text style={styles.primaryButtonText}>
+          {state.isSaving ? "Saving..." : "Add Deck"}
+        </Text>
+      </Pressable>
+    </>
+  );
+}
+
+// Main component wrapped with provider
 export default function AddDeckPage() {
+  return (
+    <DeckImportProvider>
+      <AddDeckPageContent />
+    </DeckImportProvider>
+  );
+}
+
+// Main component content
+function AddDeckPageContent() {
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <ScrollView
@@ -31,122 +454,18 @@ export default function AddDeckPage() {
         <View style={styles.heroHeader}>
           <Text style={styles.heroTitle}>Add Deck</Text>
           <Text style={styles.heroSubtitle}>
-            Build the deck profile layout before wiring import and analysis.
+            Import and analyze your deck, then manually edit the data before
+            saving.
           </Text>
         </View>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionLabel}>Decklist</Text>
-          <TextInput
-            multiline
-            placeholder="Paste Plain Text decklist here"
-            placeholderTextColor="#8A907C"
-            style={[styles.inputPanel, styles.decklistInput]}
-            textAlignVertical="top"
-          />
-
-          <View style={styles.inlineActionRow}>
-            <Pressable disabled style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Analyze Deck</Text>
-            </Pressable>
-            <Text style={styles.errorText}>Error text</Text>
-          </View>
-
-          {/* <Text style={styles.sectionLabel}>Added cards</Text>
-					<TextInput
-						multiline
-						placeholder="Added cards"
-						placeholderTextColor="#8A907C"
-						style={[styles.inputPanel, styles.addedCardsInput]}
-						textAlignVertical="top"
-					/> */}
-        </View>
-
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionLabel}>Commander: </Text>
-          <Text style={styles.sectionLabel}>Color Identity</Text>
-          <View style={styles.colorRow}>
-            {COLOR_IDENTITY.map((color) => (
-              <View key={color} style={styles.colorPill}>
-                <Text style={styles.colorPillText}>{color}</Text>
-              </View>
-            ))}
-          </View>
-
-          <Text style={styles.sectionLabel}>CMC graph</Text>
-          <View style={styles.chartFrame}>
-            <View style={styles.chartGrid}>
-              {MANA_CURVE_BARS.map((height, index) => (
-                <View key={index} style={styles.chartBarColumn}>
-                  <View
-                    style={[styles.chartBar, { height: `${height * 100}%` }]}
-                  />
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <Text style={styles.avgText}>Avg CMC:</Text>
-        </View>
-
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionLabel}>Ramp cards</Text>
-          <TextInput
-            multiline
-            placeholder="Ramp cards"
-            placeholderTextColor="#8A907C"
-            style={styles.analysisInput}
-            textAlignVertical="top"
-          />
-
-          <Text style={styles.sectionLabel}>Interaction cards</Text>
-          <TextInput
-            multiline
-            placeholder="Interaction cards"
-            placeholderTextColor="#8A907C"
-            style={styles.analysisInput}
-            textAlignVertical="top"
-          />
-
-          <Text style={styles.sectionLabel}>Wincons / combo pieces</Text>
-          <TextInput
-            multiline
-            placeholder="Wincons / combo pieces"
-            placeholderTextColor="#8A907C"
-            style={styles.analysisInput}
-            textAlignVertical="top"
-          />
-
-          <View style={styles.summaryList}>
-            {SUMMARY_ITEMS.map((item) => (
-              <View key={item} style={styles.summaryRow}>
-                <Text style={styles.summaryText}>{item}</Text>
-                <TextInput
-                  placeholder="0"
-                  placeholderTextColor="#8A907C"
-                  style={styles.summaryInput}
-                  keyboardType="numeric"
-                  returnKeyType="done"
-                />
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.archetypeRow}>
-            <View style={styles.archetypeField}>
-              <Text style={styles.archetypeLabel}>Primary Archetype</Text>
-              <Text style={styles.archetypeValue}>Primary</Text>
-            </View>
-            <View style={styles.archetypeField}>
-              <Text style={styles.archetypeLabel}>Secondary Archetype</Text>
-              <Text style={styles.archetypeValue}>Secondary</Text>
-            </View>
-          </View>
-        </View>
-
-        <Pressable disabled style={styles.primaryButton}>
-          <Text style={styles.primaryButtonText}>Add Deck</Text>
-        </Pressable>
+        <DecklistSection />
+        <DeckMetadataSection />
+        <CommanderSection />
+        <RampSection />
+        <InteractionSection />
+        <WinconsSection />
+        <SaveSection />
       </ScrollView>
     </SafeAreaView>
   );
@@ -383,5 +702,100 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: "#F7F3E8",
     letterSpacing: 0.4,
+  },
+  buttonDisabled: {
+    backgroundColor: "#8A907C",
+    opacity: 0.6,
+  },
+  colorPillActive: {
+    backgroundColor: "#B88943",
+  },
+  cardChipsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  cardChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1E9D3",
+    borderWidth: 1,
+    borderColor: "#1B1B18",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 4,
+  },
+  cardChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#171612",
+  },
+  cardChipRemove: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#8A2D2D",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardChipRemoveText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#F7F3E8",
+  },
+  addCardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  addCardInput: {
+    flex: 1,
+    borderWidth: 2,
+    borderColor: "#1B1B18",
+    borderRadius: 12,
+    backgroundColor: "#FFFCF5",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: "#171612",
+  },
+  addButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#1B1B18",
+    backgroundColor: "#1F5C47",
+  },
+  addButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#F7F3E8",
+  },
+  metadataRow: {
+    gap: 8,
+  },
+  metadataLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#171612",
+  },
+  metadataInput: {
+    minHeight: 44,
+  },
+  unsavedText: {
+    fontSize: 14,
+    color: "#8A5D00",
+    fontWeight: "600",
+    textAlign: "center",
+    paddingHorizontal: 16,
+  },
+  successText: {
+    fontSize: 14,
+    color: "#1F5C47",
+    fontWeight: "600",
+    textAlign: "center",
+    paddingHorizontal: 16,
   },
 });
