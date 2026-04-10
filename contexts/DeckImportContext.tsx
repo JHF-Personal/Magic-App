@@ -2,7 +2,7 @@ import React, { createContext, ReactNode, useContext, useReducer } from "react";
 import type {
   DecklistValidationIssue,
   ParsedDecklist,
-  StoredDeckImportResult
+  StoredDeckImportResult,
 } from "../scripts/add_deck_scripts";
 import type {
   DeckArchetypeInsert,
@@ -102,6 +102,7 @@ type DeckImportAction =
   | { type: "UPDATE_OWNER"; payload: string }
   | { type: "UPDATE_CARD_COUNTS"; payload: Partial<DeckCardCountsInsert> }
   | { type: "UPDATE_MANA_CURVE"; payload: Partial<DeckManaCurveInsert> }
+  | { type: "UPDATE_WINCON_STATS"; payload: Partial<DeckWinconSpeedInsert> }
   | {
       type: "UPDATE_RAMP_CARDS";
       payload: { type: keyof EditableDeckData["ramp"]; cards: string[] };
@@ -133,6 +134,7 @@ interface DeckImportContextType {
     updateOwner: (owner: string) => void;
     updateCardCounts: (counts: Partial<DeckCardCountsInsert>) => void;
     updateManaCurve: (curve: Partial<DeckManaCurveInsert>) => void;
+    updateWinconStats: (stats: Partial<DeckWinconSpeedInsert>) => void;
     updateRampCards: (
       type: keyof EditableDeckData["ramp"],
       cards: string[],
@@ -330,6 +332,19 @@ const deckImportReducer = (
         hasUnsavedChanges: true,
       };
 
+    case "UPDATE_WINCON_STATS":
+      return {
+        ...state,
+        editableData: {
+          ...state.editableData,
+          wincons: {
+            ...state.editableData.wincons,
+            stats: { ...state.editableData.wincons.stats, ...action.payload },
+          },
+        },
+        hasUnsavedChanges: true,
+      };
+
     case "UPDATE_RAMP_CARDS":
       if (action.payload.type === "stats") return state;
       return {
@@ -487,6 +502,10 @@ export function DeckImportProvider({ children }: { children: ReactNode }) {
 
       updateManaCurve: (curve: Partial<DeckManaCurveInsert>) => {
         dispatch({ type: "UPDATE_MANA_CURVE", payload: curve });
+      },
+
+      updateWinconStats: (stats: Partial<DeckWinconSpeedInsert>) => {
+        dispatch({ type: "UPDATE_WINCON_STATS", payload: stats });
       },
 
       updateRampCards: (

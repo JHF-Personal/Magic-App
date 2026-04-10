@@ -12,6 +12,7 @@ import {
   DeckImportProvider,
   useDeckImport,
 } from "../contexts/DeckImportContext";
+import { DeckWinconSpeedInsert } from "../types/databaseTypes";
 
 const COLOR_IDENTITY = ["W", "U", "B", "R", "G"];
 
@@ -79,12 +80,95 @@ function DecklistSection() {
 // Commander and color identity section
 function CommanderSection() {
   const { state } = useDeckImport();
+  const [selectedCommander, setSelectedCommander] = React.useState<string>(
+    state.parsedDecklist?.commander?.card_name || "",
+  );
+  const [showCommanderSelect, setShowCommanderSelect] = React.useState(false);
+
+  // Get potential commanders from mainboard (legendary creatures)
+  const potentialCommanders = React.useMemo(() => {
+    if (!state.parsedDecklist?.mainboard) return [];
+
+    // For now, we'll show all mainboard cards as potential commanders
+    // In a real implementation, you'd filter for legendary creatures
+    return state.parsedDecklist.mainboard
+      .filter(
+        (card) =>
+          card.card_name.toLowerCase().includes("legend") ||
+          card.card_name.includes("Commander") ||
+          card.card_name !== state.parsedDecklist?.commander?.card_name,
+      )
+      .map((card) => card.card_name);
+  }, [state.parsedDecklist]);
+
+  // Update selected commander when parsed data changes
+  React.useEffect(() => {
+    if (state.parsedDecklist?.commander?.card_name) {
+      setSelectedCommander(state.parsedDecklist.commander.card_name);
+    }
+  }, [state.parsedDecklist?.commander]);
 
   return (
     <View style={styles.sectionCard}>
-      <Text style={styles.sectionLabel}>
-        Commander: {state.parsedDecklist?.commander?.card_name || ""}
-      </Text>
+      <View style={styles.commanderRow}>
+        <Text style={styles.sectionLabel}>
+          Commander: {selectedCommander || "None selected"}
+        </Text>
+        {state.parsedDecklist && potentialCommanders.length > 0 && (
+          <Pressable
+            style={styles.commanderSelectButton}
+            onPress={() => setShowCommanderSelect(!showCommanderSelect)}
+          >
+            <Text style={styles.commanderSelectButtonText}>
+              {showCommanderSelect ? "Hide" : "Change"}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+
+      {showCommanderSelect && potentialCommanders.length > 0 && (
+        <View style={styles.commanderOptions}>
+          <Text style={styles.commanderOptionsLabel}>Select Commander:</Text>
+          <ScrollView style={styles.commanderList} nestedScrollEnabled>
+            {state.parsedDecklist?.commander && (
+              <Pressable
+                style={[
+                  styles.commanderOption,
+                  selectedCommander ===
+                    state.parsedDecklist.commander.card_name &&
+                    styles.commanderOptionSelected,
+                ]}
+                onPress={() => {
+                  setSelectedCommander(
+                    state.parsedDecklist?.commander?.card_name || "",
+                  );
+                  setShowCommanderSelect(false);
+                }}
+              >
+                <Text style={styles.commanderOptionText}>
+                  {state.parsedDecklist.commander.card_name} (Detected)
+                </Text>
+              </Pressable>
+            )}
+            {potentialCommanders.map((commanderName, index) => (
+              <Pressable
+                key={index}
+                style={[
+                  styles.commanderOption,
+                  selectedCommander === commanderName &&
+                    styles.commanderOptionSelected,
+                ]}
+                onPress={() => {
+                  setSelectedCommander(commanderName);
+                  setShowCommanderSelect(false);
+                }}
+              >
+                <Text style={styles.commanderOptionText}>{commanderName}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
       <Text style={styles.sectionLabel}>Color Identity</Text>
       <View style={styles.colorRow}>
         {COLOR_IDENTITY.map((color) => {
@@ -255,7 +339,7 @@ function WinconsSection() {
 
   const updateStat = (field: string, value: string) => {
     const numValue = parseInt(value) || 0;
-    const updatedStats = { ...state.editableData.wincons.stats };
+    const updatedStats: Partial<DeckWinconSpeedInsert> = {};
 
     if (field === "combo_pieces") {
       updatedStats.num_combo_pieces = numValue;
@@ -267,7 +351,7 @@ function WinconsSection() {
       updatedStats.goldfish_turn_estimate = numValue;
     }
 
-    actions.updateWinconCards("stats", updatedStats);
+    actions.updateWinconStats(updatedStats);
   };
 
   return (
@@ -803,5 +887,54 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
     paddingHorizontal: 16,
+  },
+  commanderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  commanderSelectButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#1B1B18",
+    backgroundColor: "#E8DFC6",
+  },
+  commanderSelectButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#171612",
+  },
+  commanderOptions: {
+    gap: 8,
+    marginTop: 4,
+  },
+  commanderOptionsLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#5E5A4B",
+  },
+  commanderList: {
+    maxHeight: 150,
+    borderWidth: 1,
+    borderColor: "#C5BDA6",
+    borderRadius: 12,
+    backgroundColor: "#FFFCF5",
+  },
+  commanderOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0E8D2",
+  },
+  commanderOptionSelected: {
+    backgroundColor: "#E8DFC6",
+  },
+  commanderOptionText: {
+    fontSize: 14,
+    color: "#171612",
+    fontWeight: "600",
   },
 });
