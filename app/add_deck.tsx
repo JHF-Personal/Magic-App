@@ -61,14 +61,15 @@ function DecklistSection() {
         </Pressable>
         {state.validationIssues.filter((issue) => issue.severity === "error")
           .length > 0 && (
-          <Text style={styles.errorText}>
-            {
-              state.validationIssues.filter(
-                (issue) => issue.severity === "error",
-              ).length
-            }{" "}
-            error(s) found
-          </Text>
+          <View style={styles.errorContainer}>
+            {state.validationIssues
+              .filter((issue) => issue.severity === "error")
+              .map((error, index) => (
+                <Text key={index} style={styles.errorText}>
+                  {error.message}
+                </Text>
+              ))}
+          </View>
         )}
       </View>
     </View>
@@ -559,6 +560,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#8A2D2D",
     fontWeight: "700",
+  },
+  errorContainer: {
+    gap: 4,
+    flexShrink: 1,
+    maxWidth: 250,
   },
   addedCardsInput: {
     minHeight: 128,
