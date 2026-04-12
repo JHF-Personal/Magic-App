@@ -16,7 +16,11 @@ import {
 	getParsedMainboardCardNames,
 	getSelectableCardNames,
 } from "../scripts/add_deck_scripts";
-import { DeckWinconSpeedInsert } from "../types/databaseTypes";
+import {
+	Archetype,
+	DeckArchetypeInsert,
+	DeckWinconSpeedInsert,
+} from "../types/databaseTypes";
 
 const COLOR_IDENTITY = ["W", "U", "B", "R", "G"];
 
@@ -28,6 +32,25 @@ const SUMMARY_ITEMS = [
   "Num finishers:",
   "Est win turn:",
 ];
+
+const ARCHETYPE_OPTIONS: Archetype[] = [
+  "aggro",
+  "control",
+  "combo",
+  "midrange",
+  "stax",
+  "hybrid",
+];
+
+type ArchetypeLabelValue = Exclude<
+  DeckArchetypeInsert["primary_archetype"],
+  undefined
+>;
+
+function formatArchetypeLabel(archetype: ArchetypeLabelValue): string {
+  if (!archetype) return "None";
+  return archetype.charAt(0).toUpperCase() + archetype.slice(1);
+}
 
 interface CardSelectionPanelProps {
   availableCards: string[];
@@ -366,6 +389,10 @@ function WinconsSection() {
     () => getParsedMainboardCardNames(state.parsedDecklist),
     [state.parsedDecklist],
   );
+  const [showPrimaryArchetypeSelect, setShowPrimaryArchetypeSelect] =
+    React.useState(false);
+  const [showSecondaryArchetypeSelect, setShowSecondaryArchetypeSelect] =
+    React.useState(false);
 
   const removeWinconCard = (cardName: string) => {
     const updatedCards = state.editableData.wincons.comboPieceCards.filter(
@@ -471,15 +498,96 @@ function WinconsSection() {
       <View style={styles.archetypeRow}>
         <View style={styles.archetypeField}>
           <Text style={styles.archetypeLabel}>Primary Archetype</Text>
-          <Text style={styles.archetypeValue}>
-            {state.editableData.archetype.primary_archetype}
-          </Text>
+          <Pressable
+            style={styles.archetypeSelectButton}
+            onPress={() => {
+              setShowPrimaryArchetypeSelect((current) => !current);
+              setShowSecondaryArchetypeSelect(false);
+            }}
+          >
+            <Text style={styles.archetypeValue}>
+              {formatArchetypeLabel(
+                state.editableData.archetype.primary_archetype ?? null,
+              )}
+            </Text>
+          </Pressable>
+
+          {showPrimaryArchetypeSelect && (
+            <View style={styles.archetypeOptions}>
+              {ARCHETYPE_OPTIONS.map((option) => (
+                <Pressable
+                  key={option}
+                  style={[
+                    styles.archetypeOption,
+                    state.editableData.archetype.primary_archetype === option &&
+                      styles.archetypeOptionSelected,
+                  ]}
+                  onPress={() => {
+                    actions.updateArchetype({ primary_archetype: option });
+                    setShowPrimaryArchetypeSelect(false);
+                  }}
+                >
+                  <Text style={styles.archetypeOptionText}>
+                    {formatArchetypeLabel(option)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
+
         <View style={styles.archetypeField}>
           <Text style={styles.archetypeLabel}>Secondary Archetype</Text>
-          <Text style={styles.archetypeValue}>
-            {state.editableData.archetype.secondary_archetype || "None"}
-          </Text>
+          <Pressable
+            style={styles.archetypeSelectButton}
+            onPress={() => {
+              setShowSecondaryArchetypeSelect((current) => !current);
+              setShowPrimaryArchetypeSelect(false);
+            }}
+          >
+            <Text style={styles.archetypeValue}>
+              {formatArchetypeLabel(
+                state.editableData.archetype.secondary_archetype ?? null,
+              )}
+            </Text>
+          </Pressable>
+
+          {showSecondaryArchetypeSelect && (
+            <View style={styles.archetypeOptions}>
+              <Pressable
+                style={[
+                  styles.archetypeOption,
+                  state.editableData.archetype.secondary_archetype === null &&
+                    styles.archetypeOptionSelected,
+                ]}
+                onPress={() => {
+                  actions.updateArchetype({ secondary_archetype: null });
+                  setShowSecondaryArchetypeSelect(false);
+                }}
+              >
+                <Text style={styles.archetypeOptionText}>None</Text>
+              </Pressable>
+
+              {ARCHETYPE_OPTIONS.map((option) => (
+                <Pressable
+                  key={option}
+                  style={[
+                    styles.archetypeOption,
+                    state.editableData.archetype.secondary_archetype === option &&
+                      styles.archetypeOptionSelected,
+                  ]}
+                  onPress={() => {
+                    actions.updateArchetype({ secondary_archetype: option });
+                    setShowSecondaryArchetypeSelect(false);
+                  }}
+                >
+                  <Text style={styles.archetypeOptionText}>
+                    {formatArchetypeLabel(option)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
       </View>
     </View>
@@ -826,6 +934,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#171612",
     fontWeight: "800",
+  },
+  archetypeSelectButton: {
+    borderWidth: 1,
+    borderColor: "#1B1B18",
+    borderRadius: 12,
+    backgroundColor: "#FFFCF5",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  archetypeOptions: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#C5BDA6",
+    borderRadius: 10,
+    backgroundColor: "#FFFCF5",
+    overflow: "hidden",
+  },
+  archetypeOption: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0E8D2",
+  },
+  archetypeOptionSelected: {
+    backgroundColor: "#E8DFC6",
+  },
+  archetypeOptionText: {
+    fontSize: 14,
+    color: "#171612",
+    fontWeight: "600",
   },
   primaryButton: {
     minHeight: 62,
