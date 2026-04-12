@@ -38,7 +38,7 @@ function DecklistSection() {
       <Text style={styles.sectionLabel}>Decklist</Text>
       <TextInput
         multiline
-        placeholder="Paste decklist here using 'qty Card Name'"
+        placeholder="Paste decklist here. Decklist should be in the form: qty Card Name"
         placeholderTextColor="#8A907C"
         style={[styles.inputPanel, styles.decklistInput]}
         textAlignVertical="top"
