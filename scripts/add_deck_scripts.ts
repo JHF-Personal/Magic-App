@@ -2,12 +2,10 @@
 // Deck Import Script Contracts
 // Defines the parsing and persistence surface for plain text decklists.
 //
-// Supported formats:
-// - "1 Card Name" (quantity + card name)
-// - "Card Name" (assumes quantity of 1)
-// - "Commander: Card Name" or "Commander: 1 Card Name"
-// - Section headers: "Commander", "Creatures", "Spells", "Lands", etc.
-// - Comments: Lines starting with "//" or "#"
+// Supported format:
+// - "qty Card Name"
+// - Mainboard only
+// - Total quantity must equal exactly 100 cards
 //
 // Implementations will be added later.
 // ============================================================================
@@ -28,12 +26,7 @@ import type {
   DeckWinconSpeedInsert,
 } from "../types/databaseTypes";
 
-export type DeckSection =
-  | "commander"
-  | "mainboard"
-  | "sideboard"
-  | "companion"
-  | "unknown";
+export type DeckSection = "mainboard";
 
 export type DecklistIssueSeverity = "error" | "warning";
 
@@ -110,63 +103,12 @@ export interface StoredDeckImportResult {
 }
 
 const CARD_LINE_REGEX = /^(\d+)\s+(.+?)\s*$/;
-const CARD_LINE_WITHOUT_QUANTITY_REGEX = /^([a-zA-Z].+?)\s*$/;
-const PREFIXED_CARD_LINE_REGEX =
-  /^(SB|SIDEBOARD|CMDR|CMD|COMMANDER|COMPANION):\s*(\d+)?\s*(.+?)\s*$/i;
 const PRINTING_SUFFIX_REGEX =
   /\s+\([A-Za-z0-9]{2,10}\)\s+[^\s]+(?:\s+\*[^*]+\*)?$/;
 
 interface ParsedDecklistInternal {
   parsed_decklist: ParsedDecklist;
   issues: DecklistValidationIssue[];
-}
-
-function getSectionFromHeader(line: string): DeckSection | null {
-  const normalized_line = line.trim().replace(/:$/, "").toLowerCase();
-
-  switch (normalized_line) {
-    case "deck":
-    case "main":
-    case "maindeck":
-    case "mainboard":
-    case "creatures":
-    case "spells":
-    case "lands":
-    case "artifacts":
-    case "enchantments":
-    case "planeswalkers":
-    case "instants":
-    case "sorceries":
-      return "mainboard";
-    case "commander":
-    case "cmdr":
-    case "cmd":
-    case "general":
-      return "commander";
-    case "companion":
-      return "companion";
-    case "side":
-    case "sideboard":
-    case "sb":
-      return "sideboard";
-    default:
-      return null;
-  }
-}
-
-function getSectionFromPrefix(prefix: string): DeckSection {
-  switch (prefix.toUpperCase()) {
-    case "SB":
-    case "SIDEBOARD":
-      return "sideboard";
-    case "COMPANION":
-      return "companion";
-    case "CMDR":
-    case "CMD":
-    case "COMMANDER":
-    default:
-      return "commander";
-  }
 }
 
 function normalizeCardName(card_name: string): string {
@@ -190,83 +132,43 @@ function createIssue(
   message: string,
   raw_line: string,
 ): DecklistValidationIssue {
+  const formatted_message =
+    line_number > 0 ? `Line ${line_number}: ${message}` : message;
+
   return {
     severity,
     line_number,
-    message,
+    message: formatted_message,
     raw_line,
   };
 }
 
-function parseCardLine(
-  line: string,
-  current_section: DeckSection,
-): DecklistCard | null {
-  const prefixed_match = line.match(PREFIXED_CARD_LINE_REGEX);
-  if (prefixed_match) {
-    const quantity = prefixed_match[2]
-      ? Number.parseInt(prefixed_match[2], 10)
-      : 1;
-    const card_name = normalizeCardName(prefixed_match[3]);
-
-    if (!Number.isInteger(quantity) || quantity <= 0 || !card_name) {
-      return null;
-    }
-
-    return {
-      quantity,
-      card_name,
-      section: getSectionFromPrefix(prefixed_match[1]),
-      raw_line: line,
-    };
-  }
-
+function parseCardLine(line: string): DecklistCard | null {
   const match = line.match(CARD_LINE_REGEX);
-  if (match) {
-    const quantity = Number.parseInt(match[1], 10);
-    const card_name = normalizeCardName(match[2]);
-
-    if (!Number.isInteger(quantity) || quantity <= 0 || !card_name) {
-      return null;
-    }
-
-    return {
-      quantity,
-      card_name,
-      section: current_section,
-      raw_line: line,
-    };
+  if (!match) {
+    return null;
   }
 
-  // Handle card names without explicit quantity (assume 1)
-  const no_quantity_match = line.match(CARD_LINE_WITHOUT_QUANTITY_REGEX);
-  if (no_quantity_match) {
-    const card_name = normalizeCardName(no_quantity_match[1]);
+  const quantity = Number.parseInt(match[1], 10);
+  const card_name = normalizeCardName(match[2]);
 
-    if (!card_name) {
-      return null;
-    }
-
-    return {
-      quantity: 1,
-      card_name,
-      section: current_section,
-      raw_line: line,
-    };
+  if (!Number.isInteger(quantity) || quantity <= 0 || !card_name) {
+    return null;
   }
 
-  return null;
+  return {
+    quantity,
+    card_name,
+    section: "mainboard",
+    raw_line: line,
+  };
 }
 
 function parseDecklistInternal(raw_decklist: string): ParsedDecklistInternal {
   const normalized_decklist = normalizeDecklist(raw_decklist);
   const issues: DecklistValidationIssue[] = [];
-  const ignored_lines: string[] = [];
-  const commander_cards: DecklistCard[] = [];
-  const companion_cards: DecklistCard[] = [];
   const mainboard: DecklistCard[] = [];
-  const sideboard: DecklistCard[] = [];
-  let current_section: DeckSection = "mainboard";
+  let last_non_empty_line_number = 1;
 
   if (!normalized_decklist) {
     issues.push(createIssue("error", 0, "Decklist is empty.", ""));
@@ -280,120 +182,29 @@ function parseDecklistInternal(raw_decklist: string): ParsedDecklistInternal {
       continue;
     }
 
-    const section = getSectionFromHeader(trimmed_line);
-    if (section) {
-      current_section = section;
-      continue;
-    }
+    last_non_empty_line_number = line_number;
 
-    if (trimmed_line.startsWith("//") || trimmed_line.startsWith("#")) {
-      ignored_lines.push(raw_line);
-      continue;
-    }
-
-    const parsed_card = parseCardLine(trimmed_line, current_section);
+    const parsed_card = parseCardLine(trimmed_line);
     if (!parsed_card) {
-      ignored_lines.push(raw_line);
       issues.push(
         createIssue(
-          "warning",
+          "error",
           line_number,
-          "Line does not match expected card format (try '1 Card Name' or 'Card Name').",
+          "Line must match the format 'qty Card Name'.",
           raw_line,
         ),
       );
       continue;
     }
 
-    switch (parsed_card.section) {
-      case "commander":
-        commander_cards.push(parsed_card);
-        break;
-      case "companion":
-        companion_cards.push(parsed_card);
-        break;
-      case "sideboard":
-        sideboard.push(parsed_card);
-        break;
-      case "mainboard":
-      case "unknown":
-      default:
-        mainboard.push(parsed_card);
-        break;
-    }
-  }
-
-  if (commander_cards.length > 1) {
-    issues.push(
-      createIssue(
-        "warning",
-        0,
-        "Multiple commander entries were found. Analysis will ignore the commander slot until you choose one.",
-        commander_cards.map((card) => card.raw_line).join("\n"),
-      ),
-    );
-  }
-
-  if (companion_cards.length > 1) {
-    issues.push(
-      createIssue(
-        "error",
-        0,
-        "Multiple companion entries were found. Expected at most one companion.",
-        companion_cards.map((card) => card.raw_line).join("\n"),
-      ),
-    );
-  }
-
-  let commander = commander_cards[0] ?? null;
-  let resolved_sideboard = sideboard;
-
-  if (!commander && sideboard.length === 1) {
-    commander = {
-      ...sideboard[0],
-      section: "commander",
-    };
-    resolved_sideboard = [];
-  }
-
-  const companion = companion_cards[0] ?? null;
-
-  if (!commander) {
-    issues.push(
-      createIssue(
-        "warning",
-        0,
-        "No commander entry was found in the decklist. Choose a commander after analysis before saving.",
-        normalized_decklist,
-      ),
-    );
-  } else if (commander.quantity !== 1) {
-    issues.push(
-      createIssue(
-        "warning",
-        0,
-        "Commander entry should have a quantity of 1. Analysis will ignore the commander slot until you choose one.",
-        commander.raw_line,
-      ),
-    );
-  }
-
-  if (companion && companion.quantity !== 1) {
-    issues.push(
-      createIssue(
-        "error",
-        0,
-        "Companion entry must have a quantity of 1.",
-        companion.raw_line,
-      ),
-    );
+    mainboard.push(parsed_card);
   }
 
   if (mainboard.length === 0) {
     issues.push(
       createIssue(
         "error",
-        0,
+        1,
         "No mainboard cards were found in the decklist.",
         normalized_decklist,
       ),
@@ -405,24 +216,13 @@ function parseDecklistInternal(raw_decklist: string): ParsedDecklistInternal {
     0,
   );
 
-  if (total_card_count > 0 && total_card_count !== 99) {
+  if (total_card_count > 0 && total_card_count !== 100) {
     issues.push(
       createIssue(
-        "warning",
-        0,
-        `Commander mainboard usually contains 99 cards; found ${total_card_count}.`,
+        "error",
+        last_non_empty_line_number,
+        `Decklist must contain exactly 100 total cards; found ${total_card_count}.`,
         normalized_decklist,
-      ),
-    );
-  }
-
-  if (resolved_sideboard.length > 0) {
-    issues.push(
-      createIssue(
-        "warning",
-        0,
-        "Additional sideboard cards were found after commander extraction.",
-        resolved_sideboard.map((card) => card.raw_line).join("\n"),
       ),
     );
   }
@@ -431,11 +231,11 @@ function parseDecklistInternal(raw_decklist: string): ParsedDecklistInternal {
     parsed_decklist: {
       raw_decklist,
       normalized_decklist,
-      commander,
-      companion,
+      commander: null,
+      companion: null,
       mainboard,
-      sideboard: resolved_sideboard,
-      ignored_lines,
+      sideboard: [],
+      ignored_lines: [],
       total_card_count,
     },
     issues,

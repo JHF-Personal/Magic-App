@@ -38,7 +38,7 @@ function DecklistSection() {
       <Text style={styles.sectionLabel}>Decklist</Text>
       <TextInput
         multiline
-        placeholder="Paste Plain Text decklist here"
+        placeholder="Paste decklist here using 'qty Card Name'"
         placeholderTextColor="#8A907C"
         style={[styles.inputPanel, styles.decklistInput]}
         textAlignVertical="top"
@@ -121,7 +121,7 @@ function CommanderSection() {
       </View>
 
       <Text style={styles.helperText}>
-        Analysis ignores the imported commander slot until you choose a commander.
+        Analyze a 100-card mainboard, then choose the commander before saving.
       </Text>
 
       {showCommanderSelect && potentialCommanders.length > 0 && (
@@ -141,12 +141,7 @@ function CommanderSection() {
                   setShowCommanderSelect(false);
                 }}
               >
-                <Text style={styles.commanderOptionText}>
-                  {commanderName}
-                  {commanderName === state.parsedDecklist?.commander?.card_name
-                    ? " (Imported commander slot)"
-                    : ""}
-                </Text>
+                <Text style={styles.commanderOptionText}>{commanderName}</Text>
               </Pressable>
             ))}
           </ScrollView>
