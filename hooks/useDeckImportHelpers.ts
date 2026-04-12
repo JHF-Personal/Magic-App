@@ -48,6 +48,7 @@ export function useDeckImportHelpers() {
       return {
         deckName: "",
         owner: "",
+        selectedCommander: "",
         cardCounts,
         colorIdentity,
         manaCurve: {
@@ -371,7 +372,11 @@ export function useDeckImportHelpers() {
 
     // Status checks
     canAnalyze: !!state.rawDecklist.trim(),
-    canSave: state.isValid && state.parsedDecklist && !state.isSaving,
+    canSave:
+      state.isValid &&
+      !!state.parsedDecklist &&
+      !!state.editableData.selectedCommander.trim() &&
+      !state.isSaving,
     isProcessing: state.isAnalyzing || state.isSaving,
   };
 }

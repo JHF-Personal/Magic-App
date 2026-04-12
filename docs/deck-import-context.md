@@ -38,6 +38,7 @@ interface EditableDeckData {
   // Basic metadata
   deckName: string;
   owner: string;
+  selectedCommander: string; // User-selected after analysis
 
   // Database-aligned structures
   cardCounts: DeckCardCountsInsert;
@@ -202,18 +203,25 @@ const result = storeDeckImportPlan(plan); // ✓ Used
 ### 1. User Pastes Decklist
 
 - Context validates and parses automatically
+- Commander slot is ignored for analysis defaults
 - Shows validation errors/warnings
 - Generates empty card lists for manual editing
 
-### 2. User Edits Data
+### 2. User Chooses Commander
+
+- Commander is selected after analysis from analyzed candidates
+- Save remains disabled until a commander is chosen
+
+### 3. User Edits Data
 
 - Add/remove cards from ramp, interaction, wincon lists
 - Edit deck metadata (name, owner)
 - Adjust archetype classification
 - Statistics recalculate automatically
 
-### 3. User Saves Deck
+### 4. User Saves Deck
 
+- Context uses the explicit commander selection as `commander_override`
 - Context converts editable data to database format
 - Calls existing `add_deck_scripts` functions
 - Stores to database via `databaseService`

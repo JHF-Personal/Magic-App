@@ -19,6 +19,7 @@ export interface EditableDeckData {
   // Basic deck info
   deckName: string;
   owner: string;
+  selectedCommander: string;
 
   // Card counts (mostly auto-calculated but user can override)
   cardCounts: Omit<DeckCardCountsInsert, "deck_id">;
@@ -100,6 +101,7 @@ type DeckImportAction =
   | { type: "ANALYSIS_ERROR"; payload: DecklistValidationIssue[] }
   | { type: "UPDATE_DECK_NAME"; payload: string }
   | { type: "UPDATE_OWNER"; payload: string }
+  | { type: "UPDATE_SELECTED_COMMANDER"; payload: string }
   | { type: "UPDATE_CARD_COUNTS"; payload: Partial<DeckCardCountsInsert> }
   | { type: "UPDATE_MANA_CURVE"; payload: Partial<DeckManaCurveInsert> }
   | { type: "UPDATE_WINCON_STATS"; payload: Partial<DeckWinconSpeedInsert> }
@@ -132,6 +134,7 @@ interface DeckImportContextType {
     analyzeDeck: () => Promise<void>;
     updateDeckName: (name: string) => void;
     updateOwner: (owner: string) => void;
+    updateSelectedCommander: (commanderName: string) => void;
     updateCardCounts: (counts: Partial<DeckCardCountsInsert>) => void;
     updateManaCurve: (curve: Partial<DeckManaCurveInsert>) => void;
     updateWinconStats: (stats: Partial<DeckWinconSpeedInsert>) => void;
@@ -160,6 +163,7 @@ const createInitialState = (): DeckImportState => ({
   editableData: {
     deckName: "",
     owner: "",
+    selectedCommander: "",
     cardCounts: {
       num_creatures: 0,
       num_instants: 0,
@@ -308,6 +312,16 @@ const deckImportReducer = (
         editableData: {
           ...state.editableData,
           owner: action.payload,
+        },
+        hasUnsavedChanges: true,
+      };
+
+    case "UPDATE_SELECTED_COMMANDER":
+      return {
+        ...state,
+        editableData: {
+          ...state.editableData,
+          selectedCommander: action.payload,
         },
         hasUnsavedChanges: true,
       };
@@ -496,6 +510,13 @@ export function DeckImportProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "UPDATE_OWNER", payload: owner });
       },
 
+      updateSelectedCommander: (commanderName: string) => {
+        dispatch({
+          type: "UPDATE_SELECTED_COMMANDER",
+          payload: commanderName,
+        });
+      },
+
       updateCardCounts: (counts: Partial<DeckCardCountsInsert>) => {
         dispatch({ type: "UPDATE_CARD_COUNTS", payload: counts });
       },
@@ -541,6 +562,14 @@ export function DeckImportProvider({ children }: { children: ReactNode }) {
           dispatch({
             type: "SAVE_ERROR",
             payload: "Cannot save: invalid deck data",
+          });
+          return;
+        }
+
+        if (!state.editableData.selectedCommander.trim()) {
+          dispatch({
+            type: "SAVE_ERROR",
+            payload: "Cannot save: choose a commander first",
           });
           return;
         }

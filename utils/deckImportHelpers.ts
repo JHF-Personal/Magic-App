@@ -1,17 +1,17 @@
 import type { EditableDeckData } from "../contexts/DeckImportContext";
 import type {
-  BuildDeckImportPlanOptions,
-  DeckFeatureInput,
-  DeckMetadata,
-  ParsedDecklist
+    BuildDeckImportPlanOptions,
+    DeckFeatureInput,
+    DeckMetadata,
+    ParsedDecklist
 } from "../scripts/add_deck_scripts";
 import type {
-  DeckCardCountsInsert,
-  DeckColorIdentityInsert,
-  DeckInteractionInsert,
-  DeckManaCurveInsert,
-  DeckRampInsert,
-  DeckWinconSpeedInsert
+    DeckCardCountsInsert,
+    DeckColorIdentityInsert,
+    DeckInteractionInsert,
+    DeckManaCurveInsert,
+    DeckRampInsert,
+    DeckWinconSpeedInsert
 } from "../types/databaseTypes";
 
 /**
@@ -71,6 +71,7 @@ export function generateInitialEditableData(
   return {
     deckName: "",
     owner: "",
+    selectedCommander: "",
     cardCounts,
     colorIdentity,
     manaCurve,
@@ -205,7 +206,7 @@ export function createDeckMetadata(
     deck_name: editableData.deckName,
     owner: editableData.owner,
     created_date: new Date().toISOString(),
-    commander_override: null, // Let the system detect commander from decklist
+    commander_override: editableData.selectedCommander.trim() || null,
   };
 }
 

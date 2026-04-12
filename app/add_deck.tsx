@@ -1,16 +1,16 @@
 import React from "react";
 import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+	Pressable,
+	ScrollView,
+	StyleSheet,
+	Text,
+	TextInput,
+	View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  DeckImportProvider,
-  useDeckImport,
+	DeckImportProvider,
+	useDeckImport,
 } from "../contexts/DeckImportContext";
 import { DeckWinconSpeedInsert } from "../types/databaseTypes";
 
@@ -79,40 +79,34 @@ function DecklistSection() {
 
 // Commander and color identity section
 function CommanderSection() {
-  const { state } = useDeckImport();
-  const [selectedCommander, setSelectedCommander] = React.useState<string>(
-    state.parsedDecklist?.commander?.card_name || "",
-  );
+  const { state, actions } = useDeckImport();
   const [showCommanderSelect, setShowCommanderSelect] = React.useState(false);
 
-  // Get potential commanders from mainboard (legendary creatures)
   const potentialCommanders = React.useMemo(() => {
     if (!state.parsedDecklist?.mainboard) return [];
 
-    // For now, we'll show all mainboard cards as potential commanders
-    // In a real implementation, you'd filter for legendary creatures
-    return state.parsedDecklist.mainboard
-      .filter(
-        (card) =>
-          card.card_name.toLowerCase().includes("legend") ||
-          card.card_name.includes("Commander") ||
-          card.card_name !== state.parsedDecklist?.commander?.card_name,
-      )
-      .map((card) => card.card_name);
+    const candidates = new Set(
+      state.parsedDecklist.mainboard.map((card) => card.card_name),
+    );
+
+    if (state.parsedDecklist.commander?.card_name) {
+      candidates.add(state.parsedDecklist.commander.card_name);
+    }
+
+    return Array.from(candidates).sort((left, right) =>
+      left.localeCompare(right),
+    );
   }, [state.parsedDecklist]);
 
-  // Update selected commander when parsed data changes
   React.useEffect(() => {
-    if (state.parsedDecklist?.commander?.card_name) {
-      setSelectedCommander(state.parsedDecklist.commander.card_name);
-    }
-  }, [state.parsedDecklist?.commander]);
+    setShowCommanderSelect(false);
+  }, [state.parsedDecklist?.normalized_decklist]);
 
   return (
     <View style={styles.sectionCard}>
       <View style={styles.commanderRow}>
         <Text style={styles.sectionLabel}>
-          Commander: {selectedCommander || "None selected"}
+          Commander: {state.editableData.selectedCommander || "Choose after analysis"}
         </Text>
         {state.parsedDecklist && potentialCommanders.length > 0 && (
           <Pressable
@@ -120,50 +114,39 @@ function CommanderSection() {
             onPress={() => setShowCommanderSelect(!showCommanderSelect)}
           >
             <Text style={styles.commanderSelectButtonText}>
-              {showCommanderSelect ? "Hide" : "Change"}
+              {showCommanderSelect ? "Hide" : state.editableData.selectedCommander ? "Change" : "Choose"}
             </Text>
           </Pressable>
         )}
       </View>
 
+      <Text style={styles.helperText}>
+        Analysis ignores the imported commander slot until you choose a commander.
+      </Text>
+
       {showCommanderSelect && potentialCommanders.length > 0 && (
         <View style={styles.commanderOptions}>
           <Text style={styles.commanderOptionsLabel}>Select Commander:</Text>
           <ScrollView style={styles.commanderList} nestedScrollEnabled>
-            {state.parsedDecklist?.commander && (
-              <Pressable
-                style={[
-                  styles.commanderOption,
-                  selectedCommander ===
-                    state.parsedDecklist.commander.card_name &&
-                    styles.commanderOptionSelected,
-                ]}
-                onPress={() => {
-                  setSelectedCommander(
-                    state.parsedDecklist?.commander?.card_name || "",
-                  );
-                  setShowCommanderSelect(false);
-                }}
-              >
-                <Text style={styles.commanderOptionText}>
-                  {state.parsedDecklist.commander.card_name} (Detected)
-                </Text>
-              </Pressable>
-            )}
             {potentialCommanders.map((commanderName, index) => (
               <Pressable
                 key={index}
                 style={[
                   styles.commanderOption,
-                  selectedCommander === commanderName &&
+                  state.editableData.selectedCommander === commanderName &&
                     styles.commanderOptionSelected,
                 ]}
                 onPress={() => {
-                  setSelectedCommander(commanderName);
+                  actions.updateSelectedCommander(commanderName);
                   setShowCommanderSelect(false);
                 }}
               >
-                <Text style={styles.commanderOptionText}>{commanderName}</Text>
+                <Text style={styles.commanderOptionText}>
+                  {commanderName}
+                  {commanderName === state.parsedDecklist?.commander?.card_name
+                    ? " (Imported commander slot)"
+                    : ""}
+                </Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -487,7 +470,11 @@ function SaveSection() {
     await actions.saveDeck();
   };
 
-  const canSave = state.isValid && state.parsedDecklist && !state.isSaving;
+  const canSave =
+    state.isValid &&
+    !!state.parsedDecklist &&
+    !!state.editableData.selectedCommander.trim() &&
+    !state.isSaving;
 
   return (
     <>
@@ -707,6 +694,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
     color: "#171612",
+  },
+  helperText: {
+    color: "#D8D0B1",
+    fontSize: 12,
+    marginBottom: 10,
   },
   analysisInput: {
     minHeight: 112,

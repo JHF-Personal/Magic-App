@@ -14,18 +14,18 @@
 
 import type { IDatabaseProvider } from "../services/databaseService";
 import type {
-	Commander,
-	CommanderInsert,
-	Deck,
-	DeckArchetypeInsert,
-	DeckCardCountsInsert,
-	DeckColorIdentityInsert,
-	DeckInsert,
-	DeckInteractionInsert,
-	DeckManaCurveInsert,
-	DeckProfile,
-	DeckRampInsert,
-	DeckWinconSpeedInsert,
+  Commander,
+  CommanderInsert,
+  Deck,
+  DeckArchetypeInsert,
+  DeckCardCountsInsert,
+  DeckColorIdentityInsert,
+  DeckInsert,
+  DeckInteractionInsert,
+  DeckManaCurveInsert,
+  DeckProfile,
+  DeckRampInsert,
+  DeckWinconSpeedInsert,
 } from "../types/databaseTypes";
 
 export type DeckSection =
@@ -326,9 +326,9 @@ function parseDecklistInternal(raw_decklist: string): ParsedDecklistInternal {
   if (commander_cards.length > 1) {
     issues.push(
       createIssue(
-        "error",
+        "warning",
         0,
-        "Multiple commander entries were found. Expected exactly one commander.",
+        "Multiple commander entries were found. Analysis will ignore the commander slot until you choose one.",
         commander_cards.map((card) => card.raw_line).join("\n"),
       ),
     );
@@ -361,18 +361,18 @@ function parseDecklistInternal(raw_decklist: string): ParsedDecklistInternal {
   if (!commander) {
     issues.push(
       createIssue(
-        "error",
+        "warning",
         0,
-        "No commander entry was found in the decklist.",
+        "No commander entry was found in the decklist. Choose a commander after analysis before saving.",
         normalized_decklist,
       ),
     );
   } else if (commander.quantity !== 1) {
     issues.push(
       createIssue(
-        "error",
+        "warning",
         0,
-        "Commander entry must have a quantity of 1.",
+        "Commander entry should have a quantity of 1. Analysis will ignore the commander slot until you choose one.",
         commander.raw_line,
       ),
     );
