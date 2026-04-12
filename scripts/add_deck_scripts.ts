@@ -11,6 +11,7 @@
 // ============================================================================
 
 import type { IDatabaseProvider } from "../services/databaseService";
+import databaseService from "../services/databaseService";
 import type {
   Commander,
   CommanderInsert,
@@ -101,6 +102,8 @@ export interface StoredDeckImportResult {
   deck: Deck;
   deck_profile: DeckProfile | null;
 }
+
+let is_database_initialized = false;
 
 const CARD_LINE_REGEX = /^(\d+)\s+(.+?)\s*$/;
 const PRINTING_SUFFIX_REGEX =
@@ -310,33 +313,209 @@ export function getSelectableCardNames(
   });
 }
 
-export declare function buildCommanderInsert(
+async function ensureDatabaseInitialized(
+  database: IDatabaseProvider,
+): Promise<void> {
+  if (is_database_initialized) {
+    return;
+  }
+
+  await database.initialize();
+  is_database_initialized = true;
+}
+
+function getCommanderName(
   parsed_decklist: ParsedDecklist,
   metadata?: DeckMetadata,
-): CommanderInsert;
+): string {
+  const commander_name = metadata?.commander_override?.trim();
 
-export declare function buildDeckImportPlan(
+  if (commander_name) {
+    return commander_name;
+  }
+
+  if (parsed_decklist.commander?.card_name?.trim()) {
+    return parsed_decklist.commander.card_name.trim();
+  }
+
+  throw new Error(
+    "Commander name is required. Choose a commander before saving.",
+  );
+}
+
+export function buildCommanderInsert(
+  parsed_decklist: ParsedDecklist,
+  metadata?: DeckMetadata,
+): CommanderInsert {
+  const commander_name = getCommanderName(parsed_decklist, metadata);
+
+  return {
+    name: commander_name,
+    color_identity: null,
+    cmc: null,
+    power: null,
+    toughness: null,
+    card_types: null,
+    subtypes: null,
+  };
+}
+
+export function buildDeckImportPlan(
   parsed_decklist: ParsedDecklist,
   options?: BuildDeckImportPlanOptions,
-): DeckImportPlan;
+): DeckImportPlan {
+  const commander = buildCommanderInsert(parsed_decklist, options);
 
-export declare function ensureCommanderRecord(
+  return {
+    parsed_decklist,
+    commander,
+    deck: {
+      deck_name: options?.deck_name ?? null,
+      owner: options?.owner ?? null,
+      created_date: options?.created_date ?? new Date().toISOString(),
+    },
+    features: options?.features,
+  };
+}
+
+export async function ensureCommanderRecord(
   commander: CommanderInsert,
   options?: StoreDeckPlanOptions,
-): Promise<Commander>;
+): Promise<Commander> {
+  const database = options?.database ?? databaseService;
+  await ensureDatabaseInitialized(database);
 
-export declare function storeDeckFeatures(
+  const should_reuse = options?.reuse_existing_commander ?? true;
+
+  if (should_reuse) {
+    const existing = await database.getCommanderByName(commander.name);
+    if (existing) {
+      return existing;
+    }
+  }
+
+  const commander_id = await database.createCommander(commander);
+  const created_commander = await database.getCommander(commander_id);
+
+  if (!created_commander) {
+    throw new Error("Commander record could not be loaded after creation.");
+  }
+
+  return created_commander;
+}
+
+export async function storeDeckFeatures(
   deck_id: number,
   features: DeckFeatureInput,
   options?: StoreDeckPlanOptions,
-): Promise<void>;
+): Promise<void> {
+  const database = options?.database ?? databaseService;
+  await ensureDatabaseInitialized(database);
 
-export declare function storeDeckImportPlan(
+  if (features.card_counts) {
+    await database.upsertDeckCardCounts({
+      deck_id,
+      ...features.card_counts,
+    });
+  }
+
+  if (features.color_identity) {
+    await database.upsertDeckColorIdentity({
+      deck_id,
+      ...features.color_identity,
+    });
+  }
+
+  if (features.mana_curve) {
+    await database.upsertDeckManaCurve({
+      deck_id,
+      ...features.mana_curve,
+    });
+  }
+
+  if (features.ramp) {
+    await database.upsertDeckRamp({
+      deck_id,
+      ...features.ramp,
+    });
+  }
+
+  if (features.interaction) {
+    await database.upsertDeckInteraction({
+      deck_id,
+      ...features.interaction,
+    });
+  }
+
+  if (features.wincon_speed) {
+    await database.upsertDeckWinconSpeed({
+      deck_id,
+      ...features.wincon_speed,
+    });
+  }
+
+  if (features.archetype) {
+    await database.upsertDeckArchetype({
+      deck_id,
+      ...features.archetype,
+    });
+  }
+}
+
+export async function storeDeckImportPlan(
   plan: DeckImportPlan,
   options?: StoreDeckPlanOptions,
-): Promise<StoredDeckImportResult>;
+): Promise<StoredDeckImportResult> {
+  const database = options?.database ?? databaseService;
+  await ensureDatabaseInitialized(database);
 
-export declare function importDecklist(
+  const commander = await ensureCommanderRecord(plan.commander, {
+    ...options,
+    database,
+  });
+
+  const deck_id = await database.createDeck({
+    commander_id: commander.commander_id,
+    ...plan.deck,
+  });
+
+  const deck = await database.getDeck(deck_id);
+  if (!deck) {
+    throw new Error("Deck record could not be loaded after creation.");
+  }
+
+  if (plan.features) {
+    await storeDeckFeatures(deck_id, plan.features, {
+      ...options,
+      database,
+    });
+  }
+
+  const deck_profile = await database.getDeckProfile(deck_id);
+
+  return {
+    commander,
+    deck,
+    deck_profile,
+  };
+}
+
+export async function importDecklist(
   raw_decklist: string,
   options?: ImportDecklistOptions,
-): Promise<StoredDeckImportResult>;
+): Promise<StoredDeckImportResult> {
+  const validation = validateDecklist(raw_decklist);
+  if (!validation.is_valid) {
+    const error_text = validation.issues
+      .filter((issue) => issue.severity === "error")
+      .map((issue) => issue.message)
+      .join("\n");
+
+    throw new Error(error_text || "Decklist validation failed.");
+  }
+
+  const parsed_decklist = parseDecklist(raw_decklist);
+  const plan = buildDeckImportPlan(parsed_decklist, options);
+
+  return storeDeckImportPlan(plan, options);
+}
