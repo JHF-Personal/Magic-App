@@ -268,6 +268,48 @@ export function parseDecklist(raw_decklist: string): ParsedDecklist {
   return parseDecklistInternal(raw_decklist).parsed_decklist;
 }
 
+/**
+ * Returns a sorted list of unique mainboard card names from a parsed decklist.
+ */
+export function getParsedMainboardCardNames(
+  parsed_decklist: ParsedDecklist | null,
+): string[] {
+  if (!parsed_decklist?.mainboard) {
+    return [];
+  }
+
+  const unique_card_names = new Set(
+    parsed_decklist.mainboard.map((card) => card.card_name),
+  );
+
+  return Array.from(unique_card_names).sort((left, right) =>
+    left.localeCompare(right),
+  );
+}
+
+/**
+ * Filters available card names by selected cards and an optional search query.
+ */
+export function getSelectableCardNames(
+  available_card_names: string[],
+  selected_card_names: string[],
+  search_query: string,
+): string[] {
+  const normalized_query = search_query.trim().toLowerCase();
+
+  return available_card_names.filter((card_name) => {
+    if (selected_card_names.includes(card_name)) {
+      return false;
+    }
+
+    if (!normalized_query) {
+      return true;
+    }
+
+    return card_name.toLowerCase().includes(normalized_query);
+  });
+}
+
 export declare function buildCommanderInsert(
   parsed_decklist: ParsedDecklist,
   metadata?: DeckMetadata,

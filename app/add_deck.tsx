@@ -12,6 +12,10 @@ import {
 	DeckImportProvider,
 	useDeckImport,
 } from "../contexts/DeckImportContext";
+import {
+	getParsedMainboardCardNames,
+	getSelectableCardNames,
+} from "../scripts/add_deck_scripts";
 import { DeckWinconSpeedInsert } from "../types/databaseTypes";
 
 const COLOR_IDENTITY = ["W", "U", "B", "R", "G"];
@@ -24,6 +28,79 @@ const SUMMARY_ITEMS = [
   "Num finishers:",
   "Est win turn:",
 ];
+
+interface CardSelectionPanelProps {
+  availableCards: string[];
+  selectedCards: string[];
+  onSelectCard: (cardName: string) => void;
+  title: string;
+}
+
+function CardSelectionPanel({
+  availableCards,
+  selectedCards,
+  onSelectCard,
+  title,
+}: CardSelectionPanelProps) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
+
+  const selectableCards = React.useMemo(() => {
+    return getSelectableCardNames(availableCards, selectedCards, search);
+  }, [availableCards, selectedCards, search]);
+
+  return (
+    <View style={styles.selectorPanel}>
+      <View style={styles.selectorHeaderRow}>
+        <Text style={styles.selectorTitle}>{title}</Text>
+        <Pressable
+          style={[
+            styles.selectorToggleButton,
+            availableCards.length === 0 && styles.buttonDisabled,
+          ]}
+          onPress={() => setIsOpen((current) => !current)}
+          disabled={availableCards.length === 0}
+        >
+          <Text style={styles.selectorToggleButtonText}>
+            {isOpen ? "Hide" : "Select"}
+          </Text>
+        </Pressable>
+      </View>
+
+      {isOpen && (
+        <>
+          <TextInput
+            placeholder="Search analyzed cards"
+            placeholderTextColor="#8A907C"
+            style={styles.selectorSearchInput}
+            value={search}
+            onChangeText={setSearch}
+          />
+
+          <ScrollView style={styles.selectorList} nestedScrollEnabled>
+            {selectableCards.map((cardName) => (
+              <Pressable
+                key={cardName}
+                style={styles.selectorItem}
+                onPress={() => onSelectCard(cardName)}
+              >
+                <Text style={styles.selectorItemText}>{cardName}</Text>
+              </Pressable>
+            ))}
+
+            {selectableCards.length === 0 && (
+              <View style={styles.selectorEmptyState}>
+                <Text style={styles.selectorEmptyStateText}>
+                  No available cards to select.
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </>
+      )}
+    </View>
+  );
+}
 
 // Decklist input component using context
 function DecklistSection() {
@@ -186,20 +263,10 @@ function CommanderSection() {
 // Ramp cards section
 function RampSection() {
   const { state, actions } = useDeckImport();
-  const [newRampCard, setNewRampCard] = React.useState("");
-
-  const addRampCard = () => {
-    if (newRampCard.trim()) {
-      const currentCards = state.editableData.ramp.rampCards;
-      if (!currentCards.includes(newRampCard.trim())) {
-        actions.updateRampCards("rampCards", [
-          ...currentCards,
-          newRampCard.trim(),
-        ]);
-      }
-      setNewRampCard("");
-    }
-  };
+  const analyzedCardNames = React.useMemo(
+    () => getParsedMainboardCardNames(state.parsedDecklist),
+    [state.parsedDecklist],
+  );
 
   const removeRampCard = (cardName: string) => {
     const updatedCards = state.editableData.ramp.rampCards.filter(
@@ -211,6 +278,18 @@ function RampSection() {
   return (
     <View style={styles.sectionCard}>
       <Text style={styles.sectionLabel}>Ramp cards</Text>
+
+      <CardSelectionPanel
+        availableCards={analyzedCardNames}
+        selectedCards={state.editableData.ramp.rampCards}
+        onSelectCard={(cardName) =>
+          actions.updateRampCards("rampCards", [
+            ...state.editableData.ramp.rampCards,
+            cardName,
+          ])
+        }
+        title="Select from analyzed cards"
+      />
 
       {/* Display current ramp cards */}
       <View style={styles.cardChipsContainer}>
@@ -226,21 +305,6 @@ function RampSection() {
           </View>
         ))}
       </View>
-
-      {/* Add new ramp card */}
-      <View style={styles.addCardRow}>
-        <TextInput
-          placeholder="Add ramp card name"
-          placeholderTextColor="#8A907C"
-          style={styles.addCardInput}
-          value={newRampCard}
-          onChangeText={setNewRampCard}
-          onSubmitEditing={addRampCard}
-        />
-        <Pressable onPress={addRampCard} style={styles.addButton}>
-          <Text style={styles.addButtonText}>Add</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
@@ -248,25 +312,32 @@ function RampSection() {
 // Interaction cards section
 function InteractionSection() {
   const { state, actions } = useDeckImport();
-  const [newInteractionCard, setNewInteractionCard] = React.useState("");
+  const analyzedCardNames = React.useMemo(
+    () => getParsedMainboardCardNames(state.parsedDecklist),
+    [state.parsedDecklist],
+  );
 
-  const addInteractionCard = () => {
-    if (newInteractionCard.trim()) {
-      const currentCards =
-        state.editableData.interaction.singleTargetRemovalCards;
-      if (!currentCards.includes(newInteractionCard.trim())) {
-        actions.updateInteractionCards("singleTargetRemovalCards", [
-          ...currentCards,
-          newInteractionCard.trim(),
-        ]);
-      }
-      setNewInteractionCard("");
-    }
+  const removeInteractionCard = (cardName: string) => {
+    const updatedCards = state.editableData.interaction.singleTargetRemovalCards
+      .filter((name) => name !== cardName);
+    actions.updateInteractionCards("singleTargetRemovalCards", updatedCards);
   };
 
   return (
     <View style={styles.sectionCard}>
       <Text style={styles.sectionLabel}>Interaction cards</Text>
+
+      <CardSelectionPanel
+        availableCards={analyzedCardNames}
+        selectedCards={state.editableData.interaction.singleTargetRemovalCards}
+        onSelectCard={(cardName) =>
+          actions.updateInteractionCards("singleTargetRemovalCards", [
+            ...state.editableData.interaction.singleTargetRemovalCards,
+            cardName,
+          ])
+        }
+        title="Select from analyzed cards"
+      />
 
       {/* Display current interaction cards */}
       <View style={styles.cardChipsContainer}>
@@ -274,24 +345,15 @@ function InteractionSection() {
           (cardName, index) => (
             <View key={index} style={styles.cardChip}>
               <Text style={styles.cardChipText}>{cardName}</Text>
+              <Pressable
+                onPress={() => removeInteractionCard(cardName)}
+                style={styles.cardChipRemove}
+              >
+                <Text style={styles.cardChipRemoveText}>×</Text>
+              </Pressable>
             </View>
           ),
         )}
-      </View>
-
-      {/* Add new interaction card */}
-      <View style={styles.addCardRow}>
-        <TextInput
-          placeholder="Add interaction card name"
-          placeholderTextColor="#8A907C"
-          style={styles.addCardInput}
-          value={newInteractionCard}
-          onChangeText={setNewInteractionCard}
-          onSubmitEditing={addInteractionCard}
-        />
-        <Pressable onPress={addInteractionCard} style={styles.addButton}>
-          <Text style={styles.addButtonText}>Add</Text>
-        </Pressable>
       </View>
     </View>
   );
@@ -300,19 +362,16 @@ function InteractionSection() {
 // Wincons section
 function WinconsSection() {
   const { state, actions } = useDeckImport();
-  const [newWinconCard, setNewWinconCard] = React.useState("");
+  const analyzedCardNames = React.useMemo(
+    () => getParsedMainboardCardNames(state.parsedDecklist),
+    [state.parsedDecklist],
+  );
 
-  const addWinconCard = () => {
-    if (newWinconCard.trim()) {
-      const currentCards = state.editableData.wincons.comboPieceCards;
-      if (!currentCards.includes(newWinconCard.trim())) {
-        actions.updateWinconCards("comboPieceCards", [
-          ...currentCards,
-          newWinconCard.trim(),
-        ]);
-      }
-      setNewWinconCard("");
-    }
+  const removeWinconCard = (cardName: string) => {
+    const updatedCards = state.editableData.wincons.comboPieceCards.filter(
+      (name) => name !== cardName,
+    );
+    actions.updateWinconCards("comboPieceCards", updatedCards);
   };
 
   const updateStat = (field: string, value: string) => {
@@ -336,28 +395,31 @@ function WinconsSection() {
     <View style={styles.sectionCard}>
       <Text style={styles.sectionLabel}>Wincons / combo pieces</Text>
 
+      <CardSelectionPanel
+        availableCards={analyzedCardNames}
+        selectedCards={state.editableData.wincons.comboPieceCards}
+        onSelectCard={(cardName) =>
+          actions.updateWinconCards("comboPieceCards", [
+            ...state.editableData.wincons.comboPieceCards,
+            cardName,
+          ])
+        }
+        title="Select from analyzed cards"
+      />
+
       {/* Display current wincon cards */}
       <View style={styles.cardChipsContainer}>
         {state.editableData.wincons.comboPieceCards.map((cardName, index) => (
           <View key={index} style={styles.cardChip}>
             <Text style={styles.cardChipText}>{cardName}</Text>
+            <Pressable
+              onPress={() => removeWinconCard(cardName)}
+              style={styles.cardChipRemove}
+            >
+              <Text style={styles.cardChipRemoveText}>×</Text>
+            </Pressable>
           </View>
         ))}
-      </View>
-
-      {/* Add new wincon card */}
-      <View style={styles.addCardRow}>
-        <TextInput
-          placeholder="Add wincon/combo piece"
-          placeholderTextColor="#8A907C"
-          style={styles.addCardInput}
-          value={newWinconCard}
-          onChangeText={setNewWinconCard}
-          onSubmitEditing={addWinconCard}
-        />
-        <Pressable onPress={addWinconCard} style={styles.addButton}>
-          <Text style={styles.addButtonText}>Add</Text>
-        </Pressable>
       </View>
 
       <View style={styles.summaryList}>
@@ -821,35 +883,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#F7F3E8",
   },
-  addCardRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  addCardInput: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: "#1B1B18",
-    borderRadius: 12,
-    backgroundColor: "#FFFCF5",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: "#171612",
-  },
-  addButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "#1B1B18",
-    backgroundColor: "#1F5C47",
-  },
-  addButtonText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#F7F3E8",
-  },
   metadataRow: {
     gap: 8,
   },
@@ -922,6 +955,70 @@ const styles = StyleSheet.create({
   commanderOptionText: {
     fontSize: 14,
     color: "#171612",
+    fontWeight: "600",
+  },
+  selectorPanel: {
+    gap: 8,
+  },
+  selectorHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  selectorTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#5E5A4B",
+  },
+  selectorToggleButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#1B1B18",
+    backgroundColor: "#E8DFC6",
+  },
+  selectorToggleButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#171612",
+  },
+  selectorSearchInput: {
+    borderWidth: 1,
+    borderColor: "#C5BDA6",
+    borderRadius: 12,
+    backgroundColor: "#FFFCF5",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: "#171612",
+  },
+  selectorList: {
+    maxHeight: 160,
+    borderWidth: 1,
+    borderColor: "#C5BDA6",
+    borderRadius: 12,
+    backgroundColor: "#FFFCF5",
+  },
+  selectorItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0E8D2",
+  },
+  selectorItemText: {
+    fontSize: 14,
+    color: "#171612",
+    fontWeight: "600",
+  },
+  selectorEmptyState: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  selectorEmptyStateText: {
+    fontSize: 13,
+    color: "#8A907C",
     fontWeight: "600",
   },
 });
