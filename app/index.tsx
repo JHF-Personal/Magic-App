@@ -13,6 +13,12 @@ export default function Index() {
       >
         <Text style={styles.buttonText}>Go to Add Deck</Text>
       </Pressable>
+      <Pressable
+        style={styles.button}
+        onPress={() => router.push("/debug" as never)}
+      >
+        <Text style={styles.buttonText}>Debug</Text>
+      </Pressable>
     </View>
   );
 }
